@@ -1,0 +1,131 @@
+/*
+ * (c) actSoft
+ *
+ * name: package.js
+ *
+ * description: description
+ *
+ * written by: Christof Donat
+ * 
+ * changes:
+ *    08.06.06 (Christof Donat): created this file
+ *    05.09.06 (Christof Donat): added License Notice
+ *    25.11.06 (Christof Donat): use window.execScript instead of timeout,
+ *                               reduced codesize a bit
+ *    29.11.06 (Christof Donat): now Works with IE 7 as well
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ *
+ */
+
+$package = function(p,o) {
+  var ps = p.split('.');
+  var co = window; 
+  for( i = 0; i < ps.length; i++ ) {
+	if( ! co[ps[i]] ) co[ps[i]] = {};
+	co = co[ps[i]];
+  }
+  for(ob in o) co[ob] = o[ob];
+};
+
+$package.packageBase = '/';
+$package.queryStringKey = '';
+
+$package.testSubobj = function(o,co) {
+  var ps = o.split('.');
+  for( i = 0; i < ps.length; i++ )
+	if( ! co[ps[i]] ) return false;
+	else co = co[ps[i]];
+  return true;
+};
+
+$package.testforobject = function(o) { return $package.testSubobj(o,$package); };
+$package.packageCreated = function(o) { return $package.testSubobj(o,window); };
+
+$package.havepackage = function(p) { return $package.testforobject(p) };
+$package.packagefinished = function(p) { return $package.testforobject(p+'.loaded')&&$package.packageCreated(p) };
+
+$package.loadscript = function(scriptURI,evalme) {
+  if($package.havepackage(p)) return;
+  var pf = p.split('.').join('/') + '.js' + '?cacheKey=' + $package.queryStringKey;
+  document.write('<script src="'+scriptURI+'"><\/script>');
+  document.write('<script>'+evalme+'<\/script>');
+};
+if( document.getElementsByTagName ) 
+$package.loadscript = function(scriptURI,evalme) {
+  var e = document.createElement("script");
+  e.src = scriptURI;
+  e.type="text/javascript";
+  document.getElementsByTagName("head")[0].appendChild(e);
+  e = document.createElement("script");
+  e.type="text/javascript";
+  e.appendChild(document.createTextNode(evalme));
+  document.getElementsByTagName("head")[0].appendChild(e);
+};
+if( ! window.execScript ) window.execScript = function(src) { eval.call(window,src) };
+
+if( window.XMLHttpRequest || window.ActiveXObject ) {
+  var isIE = false;
+  if( window.ActiveXObject ) {
+	isIE = true;
+	var lib = /MSIE 5/.test(navigator.userAgent) ? "Microsoft" : "Msxml2";
+  	window.XMLHttpRequest = function() {
+  	  return new ActiveXObject(lib + ".XMLHTTP");
+	};
+  };
+  $package._loadscript = $package.loadscript;
+  $package.loadscript = function(scriptURI,evalme) {
+	try {
+  	  var x = new XMLHttpRequest();
+  	  x.open('GET',scriptURI);
+  	  
+	  var f2 =  function() { 
+		window.execScript(x.responseText+'\n'+evalme);
+	  }; 
+	  if(isIE) x.onreadystatechange = function() { if(x.readystate == 4) f2() };
+	  else x.onload = f2;
+	  
+	  x.send(''); 
+	} catch(e) {
+	  $package._loadscript(scriptURI,evalme);
+	}
+  };
+};
+
+$package.require = function(p,f) {
+  if($package.packagefinished(p)) f();
+  else if( !$package.havepackage(p) ) {
+	$package('$package.'+p,{'onload':function() { $package('$package.'+p+'.loaded',true);$package.require(p,f) }});
+	$package.loadscript($package.packageBase + (p.split('.').join('/') + '.js' + '?cacheKey=' + $package.queryStringKey), '$package.' + p + '.onload()');
+  } else {
+	setTimeout(function(){$package.require(p,f)},10);
+  }
+};
+
+$using = function(ps, f) {
+	if (!(ps instanceof Array)) ps = [ps];
+	var count = 0;
+
+	for (var i = 0; i < ps.length; i++) {
+		$package.require(ps[i], function () {
+			count++;
+			if (count == ps.length) {
+				f();
+			}
+		});
+	}
+};
+
+/* end package.js */
